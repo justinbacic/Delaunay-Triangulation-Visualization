@@ -1,4 +1,12 @@
 import math
+import time
+import tkinter as tk
+from tkinter import messagebox
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import random
+from numpy import random
+import numpy as np
 class Vertex:
     """Represents a vertex in the DCEL."""
     def __init__(self, x, y):
@@ -6,6 +14,7 @@ class Vertex:
         self.y = y
         self.incident_edge = None  # Pointer to an arbitrary outgoing half-edge
         self.incident_edges = set()
+        self.visualization = False
 
     def __repr__(self):
         return f"({self.x}, {self.y})"
@@ -51,25 +60,31 @@ class Face:
 
 
 class Triangulation:
-    def __init__(self, points):
+    def __init__(self, points=None,speed = 1):
         self.vertices = []  # Stores Vertex objects
         self.half_edges = []  # Stores HalfEdge objects
         self.faces = []  # Stores Face objects
-        self.uninserted_points = list(points)  # Points not yet inserted
+        if(points is not None):
+            self.uninserted_points = list(points)  # Points not yet inserted
+        else:
+            self.uninserted_points = None
         self.point_triangle_map = {}  # Maps points to containing triangles
         self.triangle_point_map = {}  # Maps triangles to points inside
         self.curFaceID = 1
         self.curEdgeID = 1
         self.curVertexID = 1
-        #Store runtime metrics
-        self.edgeFlips = 0
-        self.rebuckets = 0
-        self.numInserted = 0
         # Create a supertriangle to contain all points
-        self.create_supertriangle()
         self.Tricount = 1
         self.Edgecount = 3
-        
+        self.root = tk.Tk()
+        self.visualization = VisualizationWindow(self.root)
+        self.speed = speed
+
+    def update_plot(self,circle = None):
+        if circle is not None:
+            self.visualization.updateWindow(self.uninserted_points,self.vertices,self.half_edges,circles=circle,speed = self.speed)
+        else:
+            self.visualization.updateWindow(self.uninserted_points,self.vertices,self.half_edges,speed = self.speed)
         
 
     def create_supertriangle(self):
@@ -80,11 +95,11 @@ class Triangulation:
         max_y = max(p[1] for p in self.uninserted_points)
 
         dx, dy = max_x - min_x, max_y - min_y
-        delta_max = max(dx, dy) * 1.1
+        delta_max = max(dx, dy) *1.1
 
-        v1 = self.insert_point(min_x - delta_max, min_y - delta_max/2)
-        v2 = self.insert_point(max_x + delta_max, min_y - delta_max/2)
-        v3 = self.insert_point((min_x + max_x) / 2, max_y + delta_max)
+        v1 = self.insert_point(round(min_x - delta_max,2), round(min_y - delta_max/2,2))
+        v2 = self.insert_point(round(max_x + delta_max,2), round(min_y - delta_max/2,2))
+        v3 = self.insert_point(round((min_x + max_x) / 2,2), round(max_y + delta_max,2))
 
         self.insert_triangle(v1, v2, v3)
         
@@ -97,11 +112,13 @@ class Triangulation:
         #Map triangle to all points
         self.triangle_point_map[supertriangle] = pointsInTriangle
 
+        #Update UI limits
+        self.visualization.setLimits(v1.x - 1,v2.x+1,v1.y-1,v3.y+1)
+
     def insert_point(self, x, y):
         """Inserts a new vertex into the triangulation."""
         vertex = Vertex(x, y)
         self.vertices.append(vertex)
-        self.numInserted = self.numInserted +1
         return vertex
 
 
@@ -116,7 +133,7 @@ class Triangulation:
         e1.origin, e2.origin, e3.origin = v1, v2, v3
         e1.next, e2.next, e3.next = e2, e3, e1
         e1.prev, e2.prev, e3.prev = e3, e1, e2
-        #print("For vertices",v1, v2, v3,"\nEdge 1: ",e1,"\nEdge 2: ",e2,"\nEdge 3: ",e3,"\n")
+        print("For vertices",v1, v2, v3,"\nEdge 1: ",e1,"\nEdge 2: ",e2,"\nEdge 3: ",e3,"\n")
         # Add the new edges to the incident_edges set of the vertices
         v1.incident_edges.add(e1)
         v2.incident_edges.add(e2)
@@ -127,7 +144,7 @@ class Triangulation:
         face.outer_component = e1
         e1.face = e2.face = e3.face = face
         self.half_edges.extend([e1, e2, e3])
-        #print("Adding edges in insert_triangulation: ", e1, e2, e3)
+        print("Adding edges in insert_triangulation: ", e1, e2, e3)
         self.faces.append(face)
         
 
@@ -162,11 +179,11 @@ class Triangulation:
         e1.face = e2.face = e3.face = face
         if e1Existed:
             self.half_edges.extend([e2, e3])
-            #print("Inserting edges in insert new triangulation: ", e1, e2, e3)
+            print("Inserting edges in insert new triangulation: ", e1, e2, e3)
             self.Edgecount += 2
         else:
             self.half_edges.extend([e1, e2, e3])
-            #print("Inserting edges in insert new triangulation else: ", e1, e2, e3)
+            print("Inserting edges in insert new triangulation else: ", e1, e2, e3)
             self.Edgecount += 3
         self.faces.append(face)
         self.Tricount += 1
@@ -211,19 +228,16 @@ class Triangulation:
                 pointSet = self.triangle_point_map[t1]
                 pointSet.add(i)
                 self.triangle_point_map[t1] = pointSet
-                self.rebuckets += 1
             elif(self.is_point_in_triangle(i,t2)):
                 self.point_triangle_map[i] = t2
                 pointSet = self.triangle_point_map[t2]
                 pointSet.add(i)
                 self.triangle_point_map[t2] = pointSet
-                self.rebuckets += 1
             elif(self.is_point_in_triangle(i,t3)):
                 self.point_triangle_map[i] = t3
                 pointSet = self.triangle_point_map[t3]
                 pointSet.add(i)
                 self.triangle_point_map[t3] = pointSet
-                self.rebuckets += 1
 
     def updateBucketsForFlip(self, face1, face2, t1, t2):
         if(t1 not in self.triangle_point_map):
@@ -241,13 +255,11 @@ class Triangulation:
                 pointSet = self.triangle_point_map[t1]
                 pointSet.add(i)
                 self.triangle_point_map[t1] = pointSet
-                self.rebuckets += 1
             elif(self.is_point_in_triangle(i,t2)):
                 self.point_triangle_map[i] = t2
                 pointSet = self.triangle_point_map[t2]
                 pointSet.add(i)
                 self.triangle_point_map[t2] = pointSet
-                self.rebuckets += 1
         pointsOfInterest = self.triangle_point_map.get(face2)
         for i in pointsOfInterest:
             if self.point_triangle_map[i] in self.faces:
@@ -257,13 +269,11 @@ class Triangulation:
                 pointSet = self.triangle_point_map[t1]
                 pointSet.add(i)
                 self.triangle_point_map[t1] = pointSet
-                self.rebuckets += 1
             elif(self.is_point_in_triangle(i,t2)):
                 self.point_triangle_map[i] = t2
                 pointSet = self.triangle_point_map[t2]
                 pointSet.add(i)
                 self.triangle_point_map[t2] = pointSet
-                self.rebuckets += 1
     def is_point_in_triangle(self, point, face):
         """Check if a point is inside a given triangle."""
         v1 = face.outer_component.origin
@@ -284,8 +294,8 @@ class Triangulation:
 
         # Check the in-circle condition before flipping
         if not self.in_circle(a, b, c, d):
-            return  False # No flip needed
-        self.edgeFlips += 1
+            return  # No flip needed
+        self.update_plot()
         #plot_triangulation(self)
         face1 = edge.face
         face2 = twin.face
@@ -347,17 +357,25 @@ class Triangulation:
         # Add the new faces to the structure
         self.faces.append(new_face1)
         self.faces.append(new_face2)
-        return True
-        
-        #print("\nFlipped an EDGE!!!!\n")
-
+        # Recurse on the neighboring edges
+        self.flip_edge(edge.next)
+        self.flip_edge(edge.prev)
+        self.flip_edge(twin.next)
+        self.flip_edge(twin.prev)
+        print("\nFlipped an EDGE!!!!\n")
+    def circumcenter(self,ax,ay,bx,by,cx,cy):
+        d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+        ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d
+        uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d
+        return (ux, uy)
     def in_circle(self, a, b, c, d):
         """Returns True if point d is inside the circumcircle of triangle (a, b, c)."""
         ax, ay = a.x, a.y
         bx, by = b.x, b.y
         cx, cy = c.x, c.y
         dx, dy = d.x, d.y
-
+        center = self.circumcenter(ax,ay,bx,by,cx,cy)
+        self.update_plot(plt.Circle(center,math.dist((a.x,a.y),center),fill=False,linestyle='--'))
         # Determinant method
         matrix = [
             [ax - dx, ay - dy, (ax - dx) ** 2 + (ay - dy) ** 2],
@@ -391,8 +409,10 @@ class Triangulation:
         """Performs local retriangulation after inserting a point."""
         triangle = self.find_containing_triangle(point)
         if not triangle:
-            #print(f"Error: No containing triangle found for {point}")
+            print(f"Error: No containing triangle found for {point}")
             return
+        else:
+            print("Point", point, "In Triangle", triangle,"\n")
         
         # Remove the old triangle and insert 3 new ones
         self.faces.remove(triangle)
@@ -405,6 +425,7 @@ class Triangulation:
         v2 = triangle.outer_component.next.origin
         v3 = triangle.outer_component.prev.origin
         p_vertex = self.insert_point(point[0], point[1])
+        
 
         t1 = self.insert_new_triangle(v1, v2, p_vertex)
         t2 = self.insert_new_triangle(v2, v3, p_vertex)
@@ -412,25 +433,27 @@ class Triangulation:
         self.linkTriangles(t1,t2,t3)
         self.updateBuckets(triangle, point, t1, t2, t3)
         self.triangle_point_map.pop(triangle)
-        
+        self.update_plot()
         # Flip edges if necessary
         for tri in [t1, t2, t3]:
             for edge in [tri.outer_component, tri.outer_component.next, tri.outer_component.prev]:
-                flipped = self.flip_edge(edge)
-                if(flipped):
-                    # Recurse on the neighboring edges (Moved out of flipped edge to avoid max recursion depth error)
-                    self.flip_edge(edge.next)
-                    self.flip_edge(edge.prev)
-                    self.flip_edge(edge.twin.next)
-                    self.flip_edge(edge.twin.prev)
+                self.flip_edge(edge)
 
 
-    def incremental_delaunay(self):
+    def incremental_delaunay(self,getPoints = True):
+        if(getPoints):
+            self.root.mainloop()
+            points = self.visualization.get_points()
+            self.uninserted_points = list(points)
+        else:
+            self.visualization.points = {(0,0)} #Dummy point
+            self.visualization.submit()
+        self.create_supertriangle()
         """Performs incremental Delaunay triangulation."""
         while self.uninserted_points:
             point = self.uninserted_points.pop(0)
             self.retriangulate(point)
-        
+            self.update_plot()
     def print_edges(self):
         """Prints unique edges in the triangulation."""
         printed_edges = set()
@@ -451,3 +474,187 @@ class Triangulation:
             print(f"Error {len(self.half_edges)} edges, expected {self.Edgecount}\n")
         else:
             print("Yessir\n")
+class VisualizationWindow:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Point Adder")
+        self.xmin = 0
+        self.xmax = 10
+        self.ymin = 0
+        self.ymax = 10
+        # Set up the canvas and plot
+        self.figure, self.ax = plt.subplots()
+        self.ax.set_xlim(self.xmin, self.xmax)
+        self.ax.set_ylim(self.ymin, self.ymax)
+        
+
+        # Add the canvas to the Tkinter window
+        self.canvas = FigureCanvasTkAgg(self.figure, master=root)
+        self.canvas.get_tk_widget().pack()
+
+        # List to store points
+        self.points = []
+
+        # Bind click event to add points
+        self.canvas.mpl_connect('button_press_event', self.on_click)
+
+        # Submit Button
+        self.submit_button = tk.Button(root, text="Submit in Order", command=self.submit)
+        self.submit_button.pack()
+        self.submit_rand_button = tk.Button(root, text="Submit in Random Order", command=self.submit_random)
+        self.submit_rand_button.pack()
+    def setLimits(self,x1,x2,y1,y2):
+        self.xmin = x1
+        self.xmax = x2
+        self.ymin = y1
+        self.ymax = y2
+    def updateWindow(self, uninserted_points, vertices,half_edges,speed,circles = None):
+        self.ax.clear()
+        self.ax.set_xlim(self.xmin,self.xmax)
+        self.ax.set_ylim(self.ymin, self.ymax)
+        x_vals_uninserted = []
+        y_vals_uninserted = []
+        for i in uninserted_points:
+            x_vals_uninserted.append(i[0])
+            y_vals_uninserted.append(i[1])
+        self.ax.scatter(x_vals_uninserted, y_vals_uninserted,c='red')
+        x_vals_inserted = []
+        y_vals_inserted = []
+        for i in half_edges:
+            x1 = i.origin.x
+            y1 = i.origin.y
+            x2 = i.next.origin.x
+            y2 = i.next.origin.y
+            self.ax.plot([x1, x2], [y1, y2],c='black',zorder=1)
+        for i in vertices:
+            x_vals_inserted.append(i.x)
+            y_vals_inserted.append(i.y)
+        self.ax.scatter(x_vals_inserted, y_vals_inserted,c='blue',zorder=2)
+        if circles is not None:
+            self.ax.add_patch(circles)
+        self.ax.set_xlabel("X Axis")
+        self.ax.set_ylabel("Y Axis")
+        self.ax.set_title("Triangulation Visualization")
+        self.canvas.draw()
+        plt.pause(speed)
+        #self.figure.pause(speed)
+    def on_click(self, event):
+        """Handle mouse click to add a point."""
+        x, y = round(event.xdata,2), round(event.ydata,2)
+        if x is not None and y is not None:
+            if (x,y) not in self.points:
+                self.points.append((x, y))
+                self.ax.plot(x, y, 'bo')  # Plot the point
+                self.canvas.draw()  # Redraw the canvas
+
+    def submit(self):
+        """Generate a list of points and close the window."""
+        if not self.points:
+            messagebox.showwarning("No Points", "No points added!")
+        else:
+            print("Quitting")
+            self.root.quit()  # Close the Tkinter window
+            self.root.destroy()  # Immediately destroy the window'''
+    def submit_random(self):
+        """Generate a list of points and close the window."""
+        if not self.points:
+            messagebox.showwarning("No Points", "No points added!")
+        else:
+            random.shuffle(self.points)
+            print("Quitting")
+            self.root.quit()  # Close the Tkinter window
+            self.root.destroy()  # Immediately destroy the window'''
+
+    def get_points(self):
+        """Return the list of points."""
+        return self.points
+class MainProgram:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Main Program")
+        self.root.geometry("400x400")
+
+        # Create a label for the speed value
+        self.speed_label = tk.Label(root, text="Speed Value:")
+        self.speed_label.pack(pady=10)
+
+        # Create a slider (Scale widget) for the speed value
+        # Range from 0 (slow) to 100 (fast)
+        self.speed_slider = tk.Scale(
+            root,
+            from_=0.1,
+            to=2,
+            orient=tk.HORIZONTAL,
+            label="Speed (Time in seconds for each step)",
+            resolution=0.1,
+            length=300,  # Set the length of the slider
+        )
+        self.speed_slider.set(1)  # Set default value to 50
+        self.speed_slider.pack(pady=10, padx=20)  # Add padding to avoid cutting off text
+# Create a label and entry for "How many points to generate"
+        self.points_label = tk.Label(root, text="How many points to generate:")
+        self.points_label.pack(pady=10)
+
+        self.points_entry = tk.Entry(root)
+        self.points_entry.pack(pady=5)
+
+        # Create a button to randomly generate points
+        self.generate_button = tk.Button(root, text="Randomly Generate Points", command=self.generate_random_points)
+        self.generate_button.pack(pady=10)
+
+        # Create a button to insert new points
+        self.insert_button = tk.Button(root, text="Insert New Points", command=self.open_new_window)
+        self.insert_button.pack(pady=20)
+
+    def generate_random_points(self):
+        # This function will be called when the "Randomly Generate Points" button is clicked
+        try:
+            num_points = int(self.points_entry.get())  # Get the number of points from the entry box
+            if num_points <= 0:
+                raise ValueError("Number of points must be greater than 0.")
+
+            # Generate random points (for demonstration, we'll just print them)
+            points = [(round(random.uniform(0, 10),2), (round(random.uniform(0, 10),2))) for _ in range(num_points)]
+            print(f"Generated {num_points} random points: {points}")
+
+            # Show a message box with the result
+            messagebox.showinfo("Points Generated", f"Generated {num_points} random points!")
+            speed = self.speed_slider.get()
+            tri = Triangulation(points=points,speed=speed)
+            tri.incremental_delaunay(False)
+
+        except ValueError as e:
+            # Handle invalid input (e.g., non-integer or negative values)
+            messagebox.showerror("Error", str(e))
+
+    def open_new_window(self):
+        # This function will be called when the "Insert New Points" button is clicked
+        # Assuming the new UI window is implemented in a function or class called `NewUIWindow`
+        # You can replace `NewUIWindow` with the actual implementation
+        speed = self.speed_slider.get()
+        tri = Triangulation(speed = speed)
+        tri.incremental_delaunay()
+         
+
+# Assuming NewUIWindow is a class that creates the new UI window
+class NewUIWindow:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("New UI Window")
+
+        # Add widgets and functionality for the new UI window here
+        label = tk.Label(root, text="This is the new UI window")
+        label.pack(pady=20)
+
+        # Example button in the new window
+        close_button = tk.Button(root, text="Close", command=self.root.destroy)
+        close_button.pack(pady=10)
+
+# Main application entry point
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = MainProgram(root)
+    root.mainloop()
+
+#points = [(0,1),(0,0),(1,0)]
+# Create the triangulation object and pass the figure and axes for live plotting
