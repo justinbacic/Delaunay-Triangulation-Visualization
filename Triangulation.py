@@ -70,10 +70,8 @@ class Triangulation:
         self.Tricount = 1
         self.Edgecount = 3
         
-        
-
+#Creates a triangle that encloses all of the points to be triangulated
     def create_supertriangle(self):
-        """Creates a supertriangle large enough to contain all points."""
         min_x = min(p[0] for p in self.uninserted_points)
         max_x = max(p[0] for p in self.uninserted_points)
         min_y = min(p[1] for p in self.uninserted_points)
@@ -104,9 +102,8 @@ class Triangulation:
         self.numInserted = self.numInserted +1
         return vertex
 
-
+#Inserts the super triangle only into the DCEL
     def insert_triangle(self, v1, v2, v3):
-        """Inserts a new triangle into the DCEL."""
         e1 = HalfEdge(self.curEdgeID)
         self.curEdgeID += 1
         e2 = HalfEdge(self.curEdgeID)
@@ -116,7 +113,6 @@ class Triangulation:
         e1.origin, e2.origin, e3.origin = v1, v2, v3
         e1.next, e2.next, e3.next = e2, e3, e1
         e1.prev, e2.prev, e3.prev = e3, e1, e2
-        #print("For vertices",v1, v2, v3,"\nEdge 1: ",e1,"\nEdge 2: ",e2,"\nEdge 3: ",e3,"\n")
         # Add the new edges to the incident_edges set of the vertices
         v1.incident_edges.add(e1)
         v2.incident_edges.add(e2)
@@ -127,13 +123,12 @@ class Triangulation:
         face.outer_component = e1
         e1.face = e2.face = e3.face = face
         self.half_edges.extend([e1, e2, e3])
-        #print("Adding edges in insert_triangulation: ", e1, e2, e3)
         self.faces.append(face)
-        
-
         return face
+
+#Insert new triangles into the DCEL as the result of insertion of points, the difference here is that
+#Edge e1 should already exist in this case
     def insert_new_triangle(self, v1, v2, v3):
-        """Inserts a new triangle into the DCEL."""
         e1Existed = False
         e1 = None
         for i in v1.incident_edges:
@@ -162,16 +157,14 @@ class Triangulation:
         e1.face = e2.face = e3.face = face
         if e1Existed:
             self.half_edges.extend([e2, e3])
-            #print("Inserting edges in insert new triangulation: ", e1, e2, e3)
             self.Edgecount += 2
         else:
             self.half_edges.extend([e1, e2, e3])
-            #print("Inserting edges in insert new triangulation else: ", e1, e2, e3)
             self.Edgecount += 3
         self.faces.append(face)
         self.Tricount += 1
-        #print("Adding triangle",face,"\n")
         return face
+#Makes sure that twin values are correctly set after insertion
     def linkTriangles(self, t1, t2, t3):
         e11 = t1.outer_component
         e21 = e11.next
@@ -190,10 +183,12 @@ class Triangulation:
         e33.twin = e22
     def find_containing_triangle(self, point):
         return self.point_triangle_map[point]
-    
+#This reallocates points from the larger triangle to sub triangles that are replacing it
     def updateBuckets(self, face, point, t1, t2, t3):
+        #Only consider the points in the triangle that is being replaced
         pointsOfInterest = self.triangle_point_map.get(face)
         pointsOfInterest.remove(point)
+        #Check for triangle membership inside the map
         if(t1 not in self.triangle_point_map):
             pointSet = set()      
             self.triangle_point_map[t1] = pointSet
@@ -224,7 +219,8 @@ class Triangulation:
                 pointSet.add(i)
                 self.triangle_point_map[t3] = pointSet
                 self.rebuckets += 1
-
+#Updated the maps specifically for the flip case, the special part here is we are not destroying a triangle
+#We are simply swapping some points between two prexisting triangles
     def updateBucketsForFlip(self, face1, face2, t1, t2):
         if(t1 not in self.triangle_point_map):
             pointSet = set()      
@@ -264,12 +260,15 @@ class Triangulation:
                 pointSet.add(i)
                 self.triangle_point_map[t2] = pointSet
                 self.rebuckets += 1
+#Intermediary function that converts input to inside triangle function input (not really necessary)
     def is_point_in_triangle(self, point, face):
         """Check if a point is inside a given triangle."""
         v1 = face.outer_component.origin
         v2 = face.outer_component.next.origin
         v3 = face.outer_component.next.next.origin
         return self.is_inside_triangle(point, v1, v2, v3)
+
+#Given an edge it checks if the incircle tests holds relative to that edge
     def flip_edge(self, edge):
         """Flips an edge if it violates the Delaunay condition and removes old edges."""
         twin = edge.twin
@@ -323,13 +322,6 @@ class Triangulation:
         c.incident_edges.add(edge)
         d.incident_edges.add(twin)
         
-
-        # Update the incident faces of the edges
-        
-        # Remove the old faces from the list (only after they are fully disconnected)
-        # This avoids issues where faces are removed multiple times or incorrectly.
-        
-
         # Create new faces after the flip
         new_face1 = Face(self.curFaceID)
         self.curFaceID += 1
@@ -340,7 +332,8 @@ class Triangulation:
         # Assign new faces to the edges
         edge.face, edge.next.face,edge.prev.face = new_face1, new_face1, new_face1
         twin.face, twin.next.face, twin.prev.face = new_face2, new_face2, new_face2
-        
+        # Remove the old faces from the list (only after they are fully disconnected)
+        # This avoids issues where faces are removed multiple times or incorrectly.
         self.faces.remove(face1)
         self.faces.remove(face2)
         self.updateBucketsForFlip(face1,face2,new_face1,new_face2)
@@ -348,9 +341,8 @@ class Triangulation:
         self.faces.append(new_face1)
         self.faces.append(new_face2)
         return True
-        
-        #print("\nFlipped an EDGE!!!!\n")
 
+#Checks using the determinant if a point d is inside the circumcircle of the triangle a b c 
     def in_circle(self, a, b, c, d):
         """Returns True if point d is inside the circumcircle of triangle (a, b, c)."""
         ax, ay = a.x, a.y
@@ -371,6 +363,7 @@ class Triangulation:
 
         return det > 0  # If determinant > 0, d is inside the circumcircle
 
+#Checks mathematically if a given point p is inside the triangle a,b,c
     def is_inside_triangle(self, p, a, b, c):
         """Barycentric method to check if a point is inside a triangle."""
         def sign(p1, p2, p3):
@@ -384,10 +377,8 @@ class Triangulation:
         has_pos = (d1 > 0) or (d2 > 0) or (d3 > 0)
 
         return not (has_neg and has_pos)
-
+#Recalculates the triangulation after the insertion of the specified point
     def retriangulate(self, point):
-        
-        #print(self.point_triangle_map)
         """Performs local retriangulation after inserting a point."""
         triangle = self.find_containing_triangle(point)
         if not triangle:
@@ -423,25 +414,22 @@ class Triangulation:
                     self.flip_edge(edge.prev)
                     self.flip_edge(edge.twin.next)
                     self.flip_edge(edge.twin.prev)
-
-
+    #Main loop for the incremental construction
     def incremental_delaunay(self):
         """Performs incremental Delaunay triangulation."""
         while self.uninserted_points:
             point = self.uninserted_points.pop(0)
             self.retriangulate(point)
-        
-    def print_edges(self):
-        """Prints unique edges in the triangulation."""
-        printed_edges = set()
 
+###Debug functions###
+    def print_edges(self):
+        printed_edges = set()
         print("\nEdges:")
         for edge in self.half_edges:
             print("\n",edge)
-
     def print(self):
-        """Prints the current DCEL structure."""
         print(self.faces)
+#This makes sure that the number of faces and edges are consistent with what they should be (used for debugging)
     def checkValidity(self):
         if len(self.faces) != self.Tricount:
             print(f"Error {len(self.faces)} triangles, expected {self.Tricount}\n")

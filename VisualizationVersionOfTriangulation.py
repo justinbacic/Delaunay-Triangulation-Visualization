@@ -7,6 +7,9 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import random
 from numpy import random
 import numpy as np
+'''This is a version of the Triangulation.py file that has been modified so that the triangulation class 
+has a display attirbute which it can use to update the visualization of a triangulation.
+For better comments on the Triangulation algorithm check the Triangulation.py file'''
 class Vertex:
     """Represents a vertex in the DCEL."""
     def __init__(self, x, y):
@@ -334,10 +337,7 @@ class Triangulation:
         d.incident_edges.add(twin)
         
 
-        # Update the incident faces of the edges
         
-        # Remove the old faces from the list (only after they are fully disconnected)
-        # This avoids issues where faces are removed multiple times or incorrectly.
         
 
         # Create new faces after the flip
@@ -350,7 +350,8 @@ class Triangulation:
         # Assign new faces to the edges
         edge.face, edge.next.face,edge.prev.face = new_face1, new_face1, new_face1
         twin.face, twin.next.face, twin.prev.face = new_face2, new_face2, new_face2
-        
+        # Remove the old faces from the list (only after they are fully disconnected)
+        # This avoids issues where faces are removed multiple times or incorrectly.
         self.faces.remove(face1)
         self.faces.remove(face2)
         self.updateBucketsForFlip(face1,face2,new_face1,new_face2)
@@ -618,7 +619,6 @@ class MainProgram:
             print(f"Generated {num_points} random points: {points}")
 
             # Show a message box with the result
-            messagebox.showinfo("Points Generated", f"Generated {num_points} random points!")
             speed = self.speed_slider.get()
             tri = Triangulation(points=points,speed=speed)
             tri.incremental_delaunay(False)
@@ -656,5 +656,3 @@ if __name__ == "__main__":
     app = MainProgram(root)
     root.mainloop()
 
-#points = [(0,1),(0,0),(1,0)]
-# Create the triangulation object and pass the figure and axes for live plotting
