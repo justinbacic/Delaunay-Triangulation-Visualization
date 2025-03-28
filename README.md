@@ -1,4 +1,4 @@
-This is a visualization tool for the incremental construction algorithm of the Delaunay Triangulation created in Python.
+This is a visualization tool for the incremental construction algorithm of the Delaunay Triangulation created in Python as my final project for COMP 4202.
 This application uses my own implementation of the triangulation algorithm that can also be found here.
 File Guide:
 - Triangulation.py: This file contains the triangulation implementation as used for the runtime testing
